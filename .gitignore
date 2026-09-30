@@ -1,0 +1,76 @@
+# Build
+build/
+out/
+cmake-build-*/
+CMakeCache.txt
+CMakeFiles/
+CMakeUserPresets.json
+cmake_install.cmake
+install_manifest.txt
+compile_commands.json
+CTestTestfile.cmake
+Testing/
+_deps/
+
+# Qt
+*.qmlc
+*.jsc
+moc_*.cpp
+moc_*.h
+qrc_*.cpp
+ui_*.h
+.qt/
+.qmake.stash
+*.pro.user
+*.pro.user.*
+*.qbs.user
+*.qbs.user.*
+*.qmlproject.user
+*.qmlproject.user.*
+CMakeLists.txt.user
+CMakeLists.txt.user.*
+.qtcreator/
+
+# Compilados
+*.o
+*.obj
+*.lo
+*.la
+*.a
+*.lib
+*.dll
+*.exe
+*.out
+*.app
+*.pdb
+*.ilk
+*.exp
+*.idb
+*.ipdb
+*.iobj
+*.pch
+*.gch
+
+# Visual Studio
+.vs/
+*.sln
+*.vcxproj
+*.vcxproj.filters
+*.vcxproj.user
+*.suo
+*.opensdf
+*.sdf
+*.VC.db
+*.VC.opendb
+
+# IDEs
+.idea/
+.vscode/
+*.swp
+*~
+
+# Sistema
+.DS_Store
+Thumbs.db
+Desktop.ini
+ehthumbs.db
