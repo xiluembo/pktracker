@@ -134,6 +134,7 @@ if(BUILD_TESTING AND NOT ANDROID)
         qt_add_executable(pktracker_mobile_tests
             tests/tst_mobile_ui.cpp src/MainWindow.cpp src/mobile/MobileUi.cpp)
         target_link_libraries(pktracker_mobile_tests PRIVATE pktracks_wizard Qt6::Test)
+        set_target_properties(pktracker_mobile_tests PROPERTIES WIN32_EXECUTABLE FALSE)
         add_test(NAME pktracker_mobile_tests COMMAND pktracker_mobile_tests)
     endif()
 endif()

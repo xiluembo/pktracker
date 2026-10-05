@@ -69,6 +69,7 @@ jobs:
         run: |
           $qt = Join-Path $env:GITHUB_WORKSPACE "Qt/$env:QT_VERSION/${{ matrix.qt-dir }}"
           "QT_ROOT=$qt" >> $env:GITHUB_ENV
+          "QT_PLUGIN_PATH=$qt/plugins" >> $env:GITHUB_ENV
           "$qt/bin" >> $env:GITHUB_PATH
           if ('${{ matrix.tool }}' -ne '') {
             $compiler = Get-ChildItem Qt/Tools -Recurse -Filter '${{ matrix.cxx }}.exe' | Select-Object -First 1
@@ -88,19 +89,37 @@ jobs:
       - name: Build
         run: cmake --build build --parallel 2
       - name: Test
-        run: ctest --test-dir build --output-on-failure
+        run: |
+          ctest --test-dir build --output-on-failure --output-log ctest.log
+          $testExit = $LASTEXITCODE
+          if ($testExit -ne 0) {
+            Get-Content ctest.log | ForEach-Object { Write-Output "::error::$_" }
+            if ('${{ inputs.mobile-ui }}' -eq 'true') {
+              & ./build/pktracker_mobile_tests.exe -o -,txt
+              Write-Output "::error::Mobile test executable exit code: $LASTEXITCODE"
+            }
+            exit $testExit
+          }
       - name: Package with Qt runtime
         run: |
           New-Item -ItemType Directory -Force staging | Out-Null
           Copy-Item build/PokopiaTrackPlanner.exe,build/PokopiaMidiWizard.exe staging/
           if ('${{ matrix.compiler }}' -eq 'LLVM-MINGW') {
-            windeployqt --release --no-compiler-runtime staging/PokopiaTrackPlanner.exe staging/PokopiaMidiWizard.exe
-            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+            $deployOutput = & windeployqt --release --no-compiler-runtime staging/PokopiaTrackPlanner.exe staging/PokopiaMidiWizard.exe 2>&1
+            $deployExit = $LASTEXITCODE
+            $deployOutput | ForEach-Object { Write-Output $_ }
+            if ($deployExit -ne 0) {
+              $deployOutput | ForEach-Object { Write-Output "::error::$_" }
+              exit $deployExit
+            }
             # Qt 6.8 windeployqt cannot deploy Clang's runtime automatically.
-            Copy-Item "$env:QT_ROOT/bin/libc++.dll" staging/
+            $runtimeSources = @("$env:QT_ROOT/bin", (Split-Path $env:CXX))
+            $libcxx = $runtimeSources | ForEach-Object { Join-Path $_ 'libc++.dll' } | Where-Object { Test-Path $_ } | Select-Object -First 1
+            if (!$libcxx) { throw 'LLVM-MinGW libc++.dll not found in Qt or the matching toolchain' }
+            Copy-Item $libcxx staging/
             foreach ($runtime in @('libunwind.dll', 'libwinpthread-1.dll')) {
-              $source = Join-Path "$env:QT_ROOT/bin" $runtime
-              if (Test-Path $source) { Copy-Item $source staging/ }
+              $source = $runtimeSources | ForEach-Object { Join-Path $_ $runtime } | Where-Object { Test-Path $_ } | Select-Object -First 1
+              if ($source) { Copy-Item $source staging/ }
             }
           } else {
             windeployqt --release --compiler-runtime staging/PokopiaTrackPlanner.exe staging/PokopiaMidiWizard.exe
