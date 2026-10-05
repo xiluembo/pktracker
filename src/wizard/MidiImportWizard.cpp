@@ -31,6 +31,8 @@
 #include <QtWidgets/QSlider>
 #include <QtWidgets/QSpinBox>
 #include <QtWidgets/QTableWidget>
+#include <QtWidgets/QToolButton>
+#include <QtWidgets/QStyle>
 #include <QtWidgets/QVBoxLayout>
 
 #include <algorithm>
@@ -102,6 +104,23 @@ MidiImportWizard::MidiImportWizard(QWidget* parent)
 #ifdef PKTRACKER_MOBILE_UI
     setButtonText(QWizard::NextButton, "Avançar");
     setButtonText(QWizard::BackButton, "Voltar");
+    // Native styles and large fallback fonts can make three text buttons wider
+    // than a phone. Keep the primary action labelled and compact secondary actions.
+    auto* back = new QToolButton(this);
+    back->setObjectName("mobileWizardBack");
+    back->setArrowType(Qt::LeftArrow);
+    back->setFixedSize(48, 48);
+    back->setAccessibleName("Voltar");
+    back->setToolTip("Voltar à etapa anterior");
+    setButton(QWizard::BackButton, back);
+    auto* cancel = new QToolButton(this);
+    cancel->setObjectName("mobileWizardCancel");
+    cancel->setIcon(style()->standardIcon(QStyle::SP_DialogCancelButton));
+    cancel->setIconSize(QSize(24, 24));
+    cancel->setFixedSize(48, 48);
+    cancel->setAccessibleName("Cancelar importação");
+    cancel->setToolTip("Cancelar importação");
+    setButton(QWizard::CancelButton, cancel);
 #endif
 }
 

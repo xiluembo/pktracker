@@ -77,6 +77,8 @@ private slots:
         wizard.show();
         QVERIFY(QTest::qWaitForWindowExposed(&wizard));
         QCOMPARE(wizard.width(), 320);
+        QCOMPARE(wizard.button(QWizard::BackButton)->width(), 48);
+        QCOMPARE(wizard.button(QWizard::CancelButton)->width(), 48);
     }
 };
 int main(int argc, char** argv)
