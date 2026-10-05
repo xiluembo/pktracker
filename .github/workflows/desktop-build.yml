@@ -93,7 +93,19 @@ jobs:
         run: |
           New-Item -ItemType Directory -Force staging | Out-Null
           Copy-Item build/PokopiaTrackPlanner.exe,build/PokopiaMidiWizard.exe staging/
-          windeployqt --release --compiler-runtime staging/PokopiaTrackPlanner.exe staging/PokopiaMidiWizard.exe
+          if ('${{ matrix.compiler }}' -eq 'LLVM-MINGW') {
+            windeployqt --release --no-compiler-runtime staging/PokopiaTrackPlanner.exe staging/PokopiaMidiWizard.exe
+            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+            # Qt 6.8 windeployqt cannot deploy Clang's runtime automatically.
+            Copy-Item "$env:QT_ROOT/bin/libc++.dll" staging/
+            foreach ($runtime in @('libunwind.dll', 'libwinpthread-1.dll')) {
+              $source = Join-Path "$env:QT_ROOT/bin" $runtime
+              if (Test-Path $source) { Copy-Item $source staging/ }
+            }
+          } else {
+            windeployqt --release --compiler-runtime staging/PokopiaTrackPlanner.exe staging/PokopiaMidiWizard.exe
+            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          }
       - uses: actions/upload-artifact@v4
         with:
           name: pktracker-windows-${{ matrix.compiler }}-ui-${{ inputs.mobile-ui && 'mobile' || 'desktop' }}-qt${{ env.QT_VERSION }}
