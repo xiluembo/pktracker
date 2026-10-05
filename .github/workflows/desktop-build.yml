@@ -99,7 +99,7 @@ jobs:
           ctest --test-dir build --output-on-failure --output-log ctest.log
           $testExit = $LASTEXITCODE
           if ($testExit -ne 0) {
-            Get-Content ctest.log | ForEach-Object { Write-Output "::error::$_" }
+            Get-Content ctest.log | Select-String "FAIL!|QFATAL|Fatal|Exception|Crashed|error:" | ForEach-Object { Write-Output "::error::$_" }
             if ('${{ inputs.mobile-ui }}' -eq 'true') {
               $process = Start-Process -FilePath "$env:GITHUB_WORKSPACE/build/pktracker_mobile_tests.exe" -ArgumentList '-o', 'mobile-test.txt,txt' -Wait -PassThru -NoNewWindow
               Write-Output "::error::Mobile test executable exit code: $($process.ExitCode)"
@@ -107,17 +107,25 @@ jobs:
             }
             exit $testExit
           }
+      - name: Capture failed UI test diagnostics
+        if: failure() && inputs.mobile-ui
+        run: |
+          New-Item -ItemType Directory -Force diagnostics | Out-Null
+          Copy-Item build/Testing/Temporary/*.log diagnostics/ -ErrorAction SilentlyContinue
+          $process = Start-Process -FilePath "$env:GITHUB_WORKSPACE/build/pktracker_mobile_tests.exe" -ArgumentList '-o', 'diagnostics/mobile-test.txt,txt' -Wait -PassThru -NoNewWindow -RedirectStandardOutput diagnostics/stdout.txt -RedirectStandardError diagnostics/stderr.txt
+          "Exit code: $($process.ExitCode)" | Set-Content diagnostics/exit-code.txt
+          Get-Content diagnostics/exit-code.txt,diagnostics/stderr.txt | ForEach-Object { Write-Output "::error::$_" }
+          if (Test-Path diagnostics/mobile-test.txt) { Get-Content diagnostics/mobile-test.txt | ForEach-Object { Write-Output "::error::$_" } }
       - name: Package with Qt runtime
         run: |
-          New-Item -ItemType Directory -Force staging | Out-Null
+          New-Item -ItemType Directory -Force staging,diagnostics | Out-Null
           Copy-Item build/PokopiaTrackPlanner.exe,build/PokopiaMidiWizard.exe staging/
           if ('${{ matrix.compiler }}' -eq 'LLVM-MINGW') {
-            $deployOutput = & windeployqt --release --no-compiler-runtime staging/PokopiaTrackPlanner.exe staging/PokopiaMidiWizard.exe 2>&1
-            $deployExit = $LASTEXITCODE
-            $deployOutput | ForEach-Object { Write-Output $_ }
-            if ($deployExit -ne 0) {
-              $deployOutput | ForEach-Object { Write-Output "::error::$_" }
-              exit $deployExit
+            $deploy = Start-Process -FilePath "$env:QT_ROOT/bin/windeployqt.exe" -ArgumentList '--release', '--no-compiler-runtime', 'staging/PokopiaTrackPlanner.exe', 'staging/PokopiaMidiWizard.exe' -Wait -PassThru -NoNewWindow -RedirectStandardOutput diagnostics/deploy-stdout.txt -RedirectStandardError diagnostics/deploy-stderr.txt
+            Get-Content diagnostics/deploy-stdout.txt,diagnostics/deploy-stderr.txt | ForEach-Object { Write-Output $_ }
+            if ($deploy.ExitCode -ne 0) {
+              Get-Content diagnostics/deploy-stderr.txt | Select-Object -Last 8 | ForEach-Object { Write-Output "::error::$_" }
+              exit $deploy.ExitCode
             }
             # Qt 6.8 windeployqt cannot deploy Clang's runtime automatically.
             $runtimeSources = @("$env:QT_ROOT/bin", (Split-Path $env:CXX))
@@ -137,6 +145,12 @@ jobs:
           name: pktracker-windows-${{ matrix.compiler }}-ui-${{ inputs.mobile-ui && 'mobile' || 'desktop' }}-qt${{ env.QT_VERSION }}
           path: staging/
           if-no-files-found: error
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: windows-diagnostics-${{ matrix.compiler }}
+          path: diagnostics/
+          if-no-files-found: warn
 
   linux:
     if: inputs.platform == 'linux'

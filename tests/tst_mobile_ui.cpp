@@ -2,6 +2,8 @@
 #include "wizard/MidiImportWizard.h"
 
 #include <QtTest/QTest>
+#include <QtWidgets/QApplication>
+#include <cstdio>
 #include <QtWidgets/QDialog>
 #include <QtWidgets/QListWidget>
 #include <QtWidgets/QPushButton>
@@ -77,5 +79,19 @@ private slots:
         QCOMPARE(wizard.width(), 320);
     }
 };
-QTEST_MAIN(MobileUiTests)
+int main(int argc, char** argv)
+{
+    std::fputs("Initializing Qt mobile UI test application\n", stderr);
+    std::fflush(stderr);
+    qInstallMessageHandler([](QtMsgType, const QMessageLogContext&, const QString& message) {
+        const auto text = message.toLocal8Bit();
+        std::fprintf(stderr, "%s\n", text.constData());
+        std::fflush(stderr);
+    });
+    QApplication app(argc, argv);
+    std::fputs("Qt application initialized; starting mobile UI tests\n", stderr);
+    std::fflush(stderr);
+    MobileUiTests tests;
+    return QTest::qExec(&tests, argc, argv);
+}
 #include "tst_mobile_ui.moc"
