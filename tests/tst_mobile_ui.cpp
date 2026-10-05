@@ -73,6 +73,7 @@ private slots:
         dialog->reject();
         MidiImportWizard wizard(&window);
         QCOMPARE(wizard.findChildren<QScrollArea*>().size(), wizard.pageIds().size() + 1);
+        wizard.setFont(QFont("monospace", 14));
         wizard.resize(320, 640);
         wizard.show();
         QVERIFY(QTest::qWaitForWindowExposed(&wizard));

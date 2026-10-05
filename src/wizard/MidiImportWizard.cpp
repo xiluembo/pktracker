@@ -87,8 +87,18 @@ MidiImportWizard::MidiImportWizard(QWidget* parent)
     // Every page can scroll vertically; navigation remains pinned at the bottom.
     for (int id : pageIds()) {
         auto* wizardPage = page(id);
+        auto* body = new QWidget(wizardPage);
+        body->setLayout(wizardPage->layout());
         auto* content = new QWidget(wizardPage);
-        content->setLayout(wizardPage->layout());
+        auto* contentLayout = new QVBoxLayout(content);
+        // QWizard's native subtitle header forces enough width for two lines.
+        // Let instructions wrap freely inside the scrollable mobile page instead.
+        auto* instructions = new QLabel(wizardPage->subTitle(), content);
+        instructions->setWordWrap(true);
+        instructions->setSizePolicy(QSizePolicy::Ignored, QSizePolicy::Minimum);
+        contentLayout->addWidget(instructions);
+        contentLayout->addWidget(body);
+        wizardPage->setSubTitle(QString());
         auto* scroll = new QScrollArea(wizardPage);
         scroll->setWidgetResizable(true);
         scroll->setWidget(content);
