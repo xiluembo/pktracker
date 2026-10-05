@@ -121,13 +121,22 @@ jobs:
           New-Item -ItemType Directory -Force staging,diagnostics | Out-Null
           Copy-Item build/PokopiaTrackPlanner.exe,build/PokopiaMidiWizard.exe staging/
           if ('${{ matrix.compiler }}' -eq 'LLVM-MINGW') {
-            $deploy = Start-Process -FilePath "$env:QT_ROOT/bin/windeployqt.exe" -ArgumentList '--release', '--no-compiler-runtime', 'staging/PokopiaTrackPlanner.exe', 'staging/PokopiaMidiWizard.exe' -Wait -PassThru -NoNewWindow -RedirectStandardOutput diagnostics/deploy-stdout.txt -RedirectStandardError diagnostics/deploy-stderr.txt
-            Get-Content diagnostics/deploy-stdout.txt,diagnostics/deploy-stderr.txt | ForEach-Object { Write-Output $_ }
-            if ($deploy.ExitCode -ne 0) {
-              Get-Content diagnostics/deploy-stderr.txt | Select-Object -Last 8 | ForEach-Object { Write-Output "::error::$_" }
-              exit $deploy.ExitCode
+            # Qt 6.8's deploy tool does not fully support LLVM-MinGW.
+            # Bundle release DLLs from this compiler's Qt installation instead.
+            function Copy-ReleaseDlls($sourceDirectory, $destinationDirectory) {
+              New-Item -ItemType Directory -Force $destinationDirectory | Out-Null
+              Get-ChildItem $sourceDirectory -Filter '*.dll' | Where-Object {
+                $stem = $_.BaseName
+                $debugTwin = $stem.EndsWith('d') -and (Test-Path (Join-Path $_.DirectoryName ($stem.Substring(0, $stem.Length - 1) + '.dll')))
+                !$debugTwin
+              } | Copy-Item -Destination $destinationDirectory
             }
-            # Qt 6.8 windeployqt cannot deploy Clang's runtime automatically.
+            Copy-ReleaseDlls "$env:QT_ROOT/bin" staging
+            foreach ($pluginType in @('platforms', 'platformthemes', 'styles', 'imageformats', 'iconengines', 'multimedia', 'audio', 'tls', 'networkinformation', 'generic')) {
+              $source = Join-Path "$env:QT_ROOT/plugins" $pluginType
+              if (Test-Path $source) { Copy-ReleaseDlls $source "staging/plugins/$pluginType" }
+            }
+            Set-Content staging/qt.conf -Value @('[Paths]', 'Prefix=.', 'Plugins=plugins')
             $runtimeSources = @("$env:QT_ROOT/bin", (Split-Path $env:CXX))
             $libcxx = $runtimeSources | ForEach-Object { Join-Path $_ 'libc++.dll' } | Where-Object { Test-Path $_ } | Select-Object -First 1
             if (!$libcxx) { throw 'LLVM-MinGW libc++.dll not found in Qt or the matching toolchain' }
@@ -135,6 +144,9 @@ jobs:
             foreach ($runtime in @('libunwind.dll', 'libwinpthread-1.dll')) {
               $source = $runtimeSources | ForEach-Object { Join-Path $_ $runtime } | Where-Object { Test-Path $_ } | Select-Object -First 1
               if ($source) { Copy-Item $source staging/ }
+            }
+            foreach ($requiredFile in @('Qt6Core.dll', 'Qt6Widgets.dll', 'Qt6Multimedia.dll', 'plugins/platforms/qwindows.dll', 'libc++.dll')) {
+              if (!(Test-Path "staging/$requiredFile")) { throw "Missing runtime file: $requiredFile" }
             }
           } else {
             windeployqt --release --compiler-runtime staging/PokopiaTrackPlanner.exe staging/PokopiaMidiWizard.exe

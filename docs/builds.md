@@ -12,7 +12,9 @@ separadamente, com testes, nas matrizes:
 
 Cada compilador Windows usa seu próprio pacote Qt e toolchain oficial via aqt.
 No Linux, GCC e Clang usam o pacote `linux_gcc_64`, com a mesma ABI libstdc++.
-Os artefatos Windows incluem DLLs e plugins via `windeployqt`.
+Os artefatos Windows incluem DLLs e plugins. MSVC e GCC usam `windeployqt`;
+LLVM-MinGW copia as DLLs de release e plugins da instalação Qt correspondente,
+com `qt.conf` e runtime LLVM, pois o deploy do Qt 6.8 tem suporte limitado a Clang.
 Os arquivos Linux contêm os executáveis; exigem Qt 6.8.3 Widgets e Multimedia
 no sistema (ou `LD_LIBRARY_PATH` apontando para o diretório `gcc_64/lib` do aqt).
 Os APKs Android usam SDK 35, API mínima 28, Java 17 e assinatura de debug
