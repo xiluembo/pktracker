@@ -67,6 +67,9 @@ MainWindow::MainWindow()
     createMenus();
     createTransportBar();
     createShortcuts();
+#ifdef PKTRACKER_MOBILE_UI
+    createMobileUi();
+#endif
 
     m_canvas->onCellClicked = [this](const QPoint& cell, std::optional<ItemKind> tool, Qt::KeyboardModifiers modifiers) {
         handleCellClicked(cell, tool, modifiers);

@@ -39,6 +39,9 @@ private:
     void createMenus();
     void createTransportBar();
     void createShortcuts();
+#ifdef PKTRACKER_MOBILE_UI
+    void createMobileUi();
+#endif
     void importMidi();
 
     Direction selectedDirection() const;

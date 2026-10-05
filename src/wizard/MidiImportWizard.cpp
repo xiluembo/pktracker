@@ -66,7 +66,13 @@ MidiImportWizard::MidiImportWizard(QWidget* parent)
 {
     setWindowTitle("Pokopia MIDI Import Wizard");
     setWizardStyle(QWizard::ModernStyle);
+#ifdef PKTRACKER_MOBILE_UI
+    setWizardStyle(QWizard::ClassicStyle);
+    resize(360, 640);
+    setStyleSheet("QPushButton, QComboBox, QSpinBox, QDoubleSpinBox, QLineEdit { min-height: 48px; }");
+#else
     resize(980, 720);
+#endif
 
     addPage(new FilePage(this));
     addPage(new TracksPage(this));
@@ -75,16 +81,38 @@ MidiImportWizard::MidiImportWizard(QWidget* parent)
     addPage(new QuantizationPreviewPage(this));
     addPage(new PreviewPage(this));
 
+#ifdef PKTRACKER_MOBILE_UI
+    // Every page can scroll vertically; navigation remains pinned at the bottom.
+    for (int id : pageIds()) {
+        auto* wizardPage = page(id);
+        auto* content = new QWidget(wizardPage);
+        content->setLayout(wizardPage->layout());
+        auto* scroll = new QScrollArea(wizardPage);
+        scroll->setWidgetResizable(true);
+        scroll->setWidget(content);
+        auto* pageLayout = new QVBoxLayout(wizardPage);
+        pageLayout->setContentsMargins(0, 0, 0, 0);
+        pageLayout->addWidget(scroll);
+    }
+#endif
     setButtonText(QWizard::FinishButton, "Concluir");
     setButtonText(QWizard::NextButton, "Avançar >");
     setButtonText(QWizard::BackButton, "< Voltar");
     setButtonText(QWizard::CancelButton, "Cancelar");
+#ifdef PKTRACKER_MOBILE_UI
+    setButtonText(QWizard::NextButton, "Avançar");
+    setButtonText(QWizard::BackButton, "Voltar");
+#endif
 }
 
 void MidiImportWizard::setEmbedded(bool embedded)
 {
     m_embedded = embedded;
+#ifdef PKTRACKER_MOBILE_UI
+    setButtonText(QWizard::FinishButton, embedded ? "Aplicar" : "Concluir");
+#else
     setButtonText(QWizard::FinishButton, embedded ? "Aplicar no Planner" : "Concluir");
+#endif
 }
 
 bool MidiImportWizard::isEmbedded() const
@@ -353,7 +381,11 @@ RangePage::RangePage(MidiImportWizard* wizard)
     setSubTitle("Escolha um ou mais trechos (em segundos) que serão concatenados na pista. "
                 "Os marcadores do MIDI podem ajudar a localizar as seções.");
 
+#ifdef PKTRACKER_MOBILE_UI
+    auto* layout = new QVBoxLayout(this);
+#else
     auto* layout = new QHBoxLayout(this);
+#endif
 
     auto* leftLayout = new QVBoxLayout();
     m_rangesTable = new QTableWidget(this);
@@ -364,6 +396,9 @@ RangePage::RangePage(MidiImportWizard* wizard)
     leftLayout->addWidget(m_rangesTable, 1);
 
     auto* buttonsRow = new QHBoxLayout();
+#ifdef PKTRACKER_MOBILE_UI
+    buttonsRow->setDirection(QBoxLayout::TopToBottom);
+#endif
     auto* addButton = new QPushButton("Adicionar trecho", this);
     auto* removeButton = new QPushButton("Remover selecionado", this);
     auto* uniqueButton = new QPushButton("Só compassos únicos", this);
@@ -510,6 +545,9 @@ SettingsPage::SettingsPage(MidiImportWizard* wizard)
     setSubTitle("Ajuste ritmo, transposição, percussão e a geometria do circuito.");
 
     auto* layout = new QFormLayout(this);
+#ifdef PKTRACKER_MOBILE_UI
+    layout->setRowWrapPolicy(QFormLayout::WrapAllRows);
+#endif
 
     auto* gridRow = new QHBoxLayout();
     m_gridCombo = new QComboBox(this);
@@ -842,6 +880,9 @@ PreviewPage::PreviewPage(MidiImportWizard* wizard)
     auto* layout = new QVBoxLayout(this);
 
     auto* buttonsRow = new QHBoxLayout();
+#ifdef PKTRACKER_MOBILE_UI
+    buttonsRow->setDirection(QBoxLayout::TopToBottom);
+#endif
     m_regenerateButton = new QPushButton("Gerar novamente", this);
     m_exportButton = new QPushButton("Salvar .pktrack.json...", this);
     m_openButton = new QPushButton("Salvar e abrir no Planner", this);

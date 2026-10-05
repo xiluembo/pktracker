@@ -1,0 +1,157 @@
+name: Desktop build (reusable)
+on:
+  workflow_call:
+    inputs:
+      platform:
+        type: string
+        required: true
+      mobile-ui:
+        type: boolean
+        required: true
+permissions:
+  contents: read
+
+env:
+  QT_VERSION: '6.8.3'
+  QT_QPA_PLATFORM: offscreen
+
+jobs:
+  windows:
+    if: inputs.platform == 'windows'
+    name: ${{ matrix.compiler }}
+    runs-on: windows-2022
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - compiler: MSVC-2022
+            arch: win64_msvc2022_64
+            qt-dir: msvc2022_64
+            tool: ''
+            cxx: cl
+          - compiler: MINGW-W64
+            arch: win64_mingw
+            qt-dir: mingw_64
+            tool: tools_mingw1310
+            cxx: g++
+          - compiler: LLVM-MINGW
+            arch: win64_llvm_mingw
+            qt-dir: llvm-mingw_64
+            tool: tools_llvm_mingw1706
+            cxx: clang++
+    defaults:
+      run:
+        shell: pwsh
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install aqt
+        run: python -m pip install aqtinstall==3.3.0
+      - uses: actions/cache@v4
+        id: qt-cache
+        with:
+          path: Qt
+          key: qt-${{ runner.os }}-${{ runner.arch }}-${{ env.QT_VERSION }}-${{ matrix.arch }}-${{ matrix.tool }}-aqt3.3.0-v1
+      - name: Install Qt
+        if: steps.qt-cache.outputs.cache-hit != 'true'
+        run: python -m aqt install-qt windows desktop $env:QT_VERSION ${{ matrix.arch }} -m qtmultimedia -O Qt
+      - name: Install MinGW toolchain
+        if: matrix.tool != '' && steps.qt-cache.outputs.cache-hit != 'true'
+        run: python -m aqt install-tool windows desktop ${{ matrix.tool }} -O Qt
+      - uses: ilammy/msvc-dev-cmd@v1
+        if: matrix.compiler == 'MSVC-2022'
+        with:
+          arch: x64
+      - name: Select matching Qt and compiler
+        run: |
+          $qt = Join-Path $env:GITHUB_WORKSPACE "Qt/$env:QT_VERSION/${{ matrix.qt-dir }}"
+          "QT_ROOT=$qt" >> $env:GITHUB_ENV
+          "$qt/bin" >> $env:GITHUB_PATH
+          if ('${{ matrix.tool }}' -ne '') {
+            $compiler = Get-ChildItem Qt/Tools -Recurse -Filter '${{ matrix.cxx }}.exe' | Select-Object -First 1
+            if (!$compiler) { throw 'Compiler not found in the aqt toolchain' }
+            $compiler.DirectoryName >> $env:GITHUB_PATH
+            "CXX=$($compiler.FullName)" >> $env:GITHUB_ENV
+          } else {
+            'CXX=cl' >> $env:GITHUB_ENV
+          }
+      - name: Configure
+        run: >-
+          cmake -S . -B build -G Ninja
+          -DCMAKE_BUILD_TYPE=Release
+          "-DCMAKE_PREFIX_PATH=$env:QT_ROOT"
+          -DPKTRACKER_MOBILE_UI=${{ inputs.mobile-ui && 'ON' || 'OFF' }}
+          -DBUILD_TESTING=ON
+      - name: Build
+        run: cmake --build build --parallel 2
+      - name: Test
+        run: ctest --test-dir build --output-on-failure
+      - name: Package with Qt runtime
+        run: |
+          New-Item -ItemType Directory -Force staging | Out-Null
+          Copy-Item build/PokopiaTrackPlanner.exe,build/PokopiaMidiWizard.exe staging/
+          windeployqt --release --compiler-runtime staging/PokopiaTrackPlanner.exe staging/PokopiaMidiWizard.exe
+      - uses: actions/upload-artifact@v4
+        with:
+          name: pktracker-windows-${{ matrix.compiler }}-ui-${{ inputs.mobile-ui && 'mobile' || 'desktop' }}-qt${{ env.QT_VERSION }}
+          path: staging/
+          if-no-files-found: error
+
+  linux:
+    if: inputs.platform == 'linux'
+    name: ${{ matrix.compiler }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - compiler: GCC
+            cxx: g++
+          - compiler: LLVM
+            cxx: clang++
+    env:
+      CXX: ${{ matrix.cxx }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install system dependencies and compilers
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ninja-build g++ clang libgl1-mesa-dev libegl1-mesa-dev libxkbcommon-dev libxcb-cursor0 libxcb-xkb1 libxkbcommon-x11-0 libpulse0 libasound2t64
+          python -m pip install aqtinstall==3.3.0
+      - uses: actions/cache@v4
+        id: qt-cache
+        with:
+          path: Qt
+          key: qt-${{ runner.os }}-${{ runner.arch }}-${{ env.QT_VERSION }}-linux_gcc_64-aqt3.3.0-v1
+      - name: Install Qt
+        if: steps.qt-cache.outputs.cache-hit != 'true'
+        run: python -m aqt install-qt linux desktop "$QT_VERSION" linux_gcc_64 -m qtmultimedia -O Qt
+      - name: Configure
+        run: >-
+          cmake -S . -B build -G Ninja
+          -DCMAKE_BUILD_TYPE=Release
+          -DCMAKE_PREFIX_PATH="$GITHUB_WORKSPACE/Qt/$QT_VERSION/gcc_64"
+          -DPKTRACKER_MOBILE_UI=${{ inputs.mobile-ui && 'ON' || 'OFF' }}
+          -DBUILD_TESTING=ON
+      - name: Build
+        run: cmake --build build --parallel 2
+      - name: Test
+        run: ctest --test-dir build --output-on-failure
+      - name: Package binaries
+        run: |
+          mkdir -p staging
+          cp build/PokopiaTrackPlanner build/PokopiaMidiWizard staging/
+          cp docs/builds.md staging/BUILD-INFO.md
+          tar -czf pktracker-linux-${{ matrix.compiler }}.tar.gz -C staging .
+      - uses: actions/upload-artifact@v4
+        with:
+          name: pktracker-linux-${{ matrix.compiler }}-ui-${{ inputs.mobile-ui && 'mobile' || 'desktop' }}-qt${{ env.QT_VERSION }}
+          path: pktracker-linux-*.tar.gz
+          if-no-files-found: error

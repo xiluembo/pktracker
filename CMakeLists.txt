@@ -4,9 +4,15 @@ project(PokopiaTrackPlanner VERSION 0.1.0 LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
+set(CMAKE_POSITION_INDEPENDENT_CODE ON)
 
-find_package(Qt6 REQUIRED COMPONENTS Widgets Multimedia)
-find_package(Qt6 COMPONENTS Test)
+option(PKTRACKER_MOBILE_UI "Build the touch-friendly UI (also available on desktop)" ${ANDROID})
+include(CTest)
+
+find_package(Qt6 6.8 REQUIRED COMPONENTS Widgets Multimedia)
+if(BUILD_TESTING AND NOT ANDROID)
+    find_package(Qt6 REQUIRED COMPONENTS Test)
+endif()
 
 qt_standard_project_setup()
 
@@ -80,6 +86,9 @@ qt_add_library(pktracks_wizard STATIC
     src/wizard/QuantizationPreviewWidget.h
 )
 target_link_libraries(pktracks_wizard PUBLIC pktracks_ui pktracks_midigen)
+if(PKTRACKER_MOBILE_UI)
+    target_compile_definitions(pktracks_wizard PUBLIC PKTRACKER_MOBILE_UI)
+endif()
 
 # ---- planner ----
 qt_add_executable(PokopiaTrackPlanner
@@ -89,16 +98,31 @@ qt_add_executable(PokopiaTrackPlanner
     src/main.cpp
 )
 target_link_libraries(PokopiaTrackPlanner PRIVATE pktracks_wizard)
+if(PKTRACKER_MOBILE_UI)
+    target_sources(PokopiaTrackPlanner PRIVATE src/mobile/MobileUi.cpp)
+endif()
+if(ANDROID)
+    set_target_properties(PokopiaTrackPlanner PROPERTIES
+        QT_ANDROID_PACKAGE_NAME "org.pktracker.planner"
+        QT_ANDROID_APP_NAME "Pokopia Track Planner"
+        QT_ANDROID_VERSION_CODE 1
+        QT_ANDROID_VERSION_NAME "${PROJECT_VERSION}"
+        QT_ANDROID_MIN_SDK_VERSION 28
+        QT_ANDROID_TARGET_SDK_VERSION 35
+    )
+endif()
 
 # ---- wizard standalone ----
-qt_add_executable(PokopiaMidiWizard
-    WIN32
-    src/wizard/WizardMain.cpp
-)
-target_link_libraries(PokopiaMidiWizard PRIVATE pktracks_wizard)
+if(NOT ANDROID)
+    qt_add_executable(PokopiaMidiWizard
+        WIN32
+        src/wizard/WizardMain.cpp
+    )
+    target_link_libraries(PokopiaMidiWizard PRIVATE pktracks_wizard)
+endif()
 
 # ---- testes ----
-if(Qt6Test_FOUND)
+if(BUILD_TESTING AND NOT ANDROID)
     enable_testing()
     qt_add_executable(pktracks_tests
         tests/tst_pktracks.cpp
@@ -106,4 +130,10 @@ if(Qt6Test_FOUND)
     target_link_libraries(pktracks_tests PRIVATE pktracks_midigen midifile_lib Qt6::Test)
     target_compile_definitions(pktracks_tests PRIVATE PKTRACKS_ROOT="${CMAKE_CURRENT_SOURCE_DIR}")
     add_test(NAME pktracks_tests COMMAND pktracks_tests)
+    if(PKTRACKER_MOBILE_UI)
+        qt_add_executable(pktracker_mobile_tests
+            tests/tst_mobile_ui.cpp src/MainWindow.cpp src/mobile/MobileUi.cpp)
+        target_link_libraries(pktracker_mobile_tests PRIVATE pktracks_wizard Qt6::Test)
+        add_test(NAME pktracker_mobile_tests COMMAND pktracker_mobile_tests)
+    endif()
 endif()

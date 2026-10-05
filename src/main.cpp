@@ -7,7 +7,11 @@ int main(int argc, char* argv[])
 {
     QApplication app(argc, argv);
     MainWindow window;
+#ifdef PKTRACKER_MOBILE_UI
+    window.showMaximized();
+#else
     window.show();
+#endif
 
     const QStringList arguments = QApplication::arguments();
     if (arguments.size() > 1) {
