@@ -88,6 +88,12 @@ jobs:
           -DBUILD_TESTING=ON
       - name: Build
         run: cmake --build build --parallel 2
+      - name: Prepare Qt test runtime
+        if: inputs.mobile-ui
+        run: |
+          # QApplication tests need the Widgets/Multimedia DLLs as well as QtTest.
+          Copy-Item "$env:QT_ROOT/bin/*.dll" build/
+          "$env:QT_ROOT/plugins/platforms" | ForEach-Object { "QT_QPA_PLATFORM_PLUGIN_PATH=$_" >> $env:GITHUB_ENV }
       - name: Test
         run: |
           ctest --test-dir build --output-on-failure --output-log ctest.log
@@ -95,8 +101,9 @@ jobs:
           if ($testExit -ne 0) {
             Get-Content ctest.log | ForEach-Object { Write-Output "::error::$_" }
             if ('${{ inputs.mobile-ui }}' -eq 'true') {
-              & ./build/pktracker_mobile_tests.exe -o -,txt
-              Write-Output "::error::Mobile test executable exit code: $LASTEXITCODE"
+              $process = Start-Process -FilePath "$env:GITHUB_WORKSPACE/build/pktracker_mobile_tests.exe" -ArgumentList '-o', 'mobile-test.txt,txt' -Wait -PassThru -NoNewWindow
+              Write-Output "::error::Mobile test executable exit code: $($process.ExitCode)"
+              if (Test-Path mobile-test.txt) { Get-Content mobile-test.txt | ForEach-Object { Write-Output "::error::$_" } }
             }
             exit $testExit
           }
